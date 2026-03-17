@@ -1,0 +1,105 @@
+#! /bin/bash
+
+MASTER_ADDR=localhost
+MASTER_PORT=${2-2012}
+NNODES=1
+NODE_RANK=0
+GPUS_PER_NODE=${3-4}
+TYPE=${4-"fkl"} # 'fkl', 'rkl', 'fkl+rkl', or 'akl'
+SEED=${5-10}
+DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
+                  --nnodes $NNODES \
+                  --node_rank $NODE_RANK \
+                  --master_addr $MASTER_ADDR \
+                  --master_port $MASTER_PORT"
+
+# model
+BASE_PATH=${1-"/home/hybrid_kd"}
+MODEL_TYPE="gpt2"
+CKPT_NAME="gpt2-medium"
+CKPT="${BASE_PATH}/checkpoints/${CKPT_NAME}/"
+# CKPT="gpt2" # download automatically
+TEACHER_MODEL_TYPE="gpt2"
+TEACHER_CKPT_NAME="teacher-gpt2-1.5B"
+TEACHER_CKPT="${BASE_PATH}/checkpoints/${TEACHER_CKPT_NAME}/"
+LM_HEAD="lm_head"
+# data
+DATA_DIR="${BASE_PATH}/processed_data/dolly/full/gpt2/"
+# hp
+BATCH_SIZE=4
+LR=5.0e-5
+LR_MIN=1.0e-7
+GRAD_ACC=1
+EVAL_BATCH_SIZE=8
+# length
+MAX_LENGTH=512
+# seed
+# runtime
+SAVE_PATH="${BASE_PATH}/results/train/${CKPT_NAME}/distill_lens/${TYPE}/"
+
+OPTS=""
+# model
+OPTS+=" --base-path ${BASE_PATH}"
+OPTS+=" --model-path ${CKPT}"
+OPTS+=" --model-type ${MODEL_TYPE}"
+OPTS+=" --ckpt-name ${CKPT_NAME}"
+OPTS+=" --teacher-model-path ${TEACHER_CKPT}"
+OPTS+=" --teacher-ckpt-name ${TEACHER_CKPT_NAME}"
+OPTS+=" --teacher-model-type ${TEACHER_MODEL_TYPE}"
+OPTS+=" --lm-head ${LM_HEAD}"
+OPTS+=" --n-gpu ${GPUS_PER_NODE}"
+# OPTS+=" --gradient-checkpointing"
+# data
+OPTS+=" --data-dir ${DATA_DIR}"
+OPTS+=" --num-workers 16"
+# TODO: change dev-num to eval-iters
+OPTS+=" --dev-num 1000"
+# hp
+OPTS+=" --lr ${LR}"
+OPTS+=" --lr-min ${LR_MIN}"
+OPTS+=" --batch-size ${BATCH_SIZE}"
+OPTS+=" --eval-batch-size ${EVAL_BATCH_SIZE}"
+OPTS+=" --gradient-accumulation-steps ${GRAD_ACC}"
+OPTS+=" --warmup-iters 0."
+OPTS+=" --lr-decay-style cosine"
+OPTS+=" --weight-decay 1e-2"
+OPTS+=" --clip-grad 1.0"
+OPTS+=" --epochs 20"
+OPTS+=" --kd-ratio 1.0"
+OPTS+=" --fkl-coeff 1.0"
+OPTS+=" --rkl-coeff 1.0"
+OPTS+=" --lens-coeff 1.0"
+OPTS+=" --teacher-logit-lens 8 16 24 32 40"
+OPTS+=" --student-logit-lens 4 8 12 16 20"
+
+# length
+OPTS+=" --max-length ${MAX_LENGTH}"
+OPTS+=" --max-prompt-length 256"
+# runtime
+OPTS+=" --do-train"
+OPTS+=" --do-valid"
+OPTS+=" --eval-gen"
+OPTS+=" --save-interval -1"
+OPTS+=" --eval-interval -1"
+OPTS+=" --log-interval 4"
+OPTS+=" --mid-log-num -1"
+OPTS+=" --save ${SAVE_PATH}"
+# seed
+OPTS+=" --seed ${SEED}"
+# deepspeed
+OPTS+=" --deepspeed"
+OPTS+=" --deepspeed_config ${BASE_PATH}/configs/deepspeed/ds_config_zero2_bf16.json"
+# type
+OPTS+=" --type ${TYPE}"
+
+
+export NCCL_DEBUG=""
+export WANDB_DISABLED=True
+export TF_CPP_MIN_LOG_LEVEL=3
+export PYTHONPATH=${BASE_PATH}
+CMD="torchrun ${DISTRIBUTED_ARGS} ${BASE_PATH}/finetune.py ${OPTS} $@"
+
+echo ${CMD}
+echo "PYTHONPATH=${PYTHONPATH}"
+mkdir -p ${SAVE_PATH}
+${CMD}

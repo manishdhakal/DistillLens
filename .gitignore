@@ -1,0 +1,13 @@
+checkpoints
+results
+results_old
+processed_data
+processed_data_old
+data/dolly
+logs/
+data
+wandb
+results_gpt2
+.vscode
+**.pt
+**.pyc
