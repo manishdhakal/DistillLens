@@ -272,3 +272,16 @@ def get_teacher2student_proj(args):
     s_h_dim = AutoConfig.from_pretrained(args.model_path).hidden_size
     proj_layer = nn.Linear(t_h_dim, s_h_dim, bias=False)
     return proj_layer
+
+class TunedLensProj(nn.Module):
+    def __init__(self, t_h_dim, s_h_dim, n_lenses):
+        super().__init__()
+        self.t_lenses = nn.ModuleList([nn.Linear(t_h_dim, t_h_dim, bias=False) for _ in range(n_lenses)])
+        self.s_lenses = nn.ModuleList([nn.Linear(s_h_dim, s_h_dim, bias=False) for _ in range(n_lenses)])
+
+
+def get_tunedlens_proj(args):
+    n_lenses = len(args.teacher_logit_lens)
+    t_h_dim = AutoConfig.from_pretrained(args.teacher_model_path).hidden_size
+    s_h_dim = AutoConfig.from_pretrained(args.model_path).hidden_size
+    return TunedLensProj(t_h_dim, s_h_dim, n_lenses)

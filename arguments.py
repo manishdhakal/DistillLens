@@ -38,6 +38,7 @@ def add_model_args(parser: argparse.ArgumentParser):
     group.add_argument("--no-value", action="store_true")
     group.add_argument("--dropout-path-rate", type=float, default=None)
     group.add_argument("--dtype", type=str, choices=["torch.float32", "torch.float16", "torch.bfloat16"], default="torch.float16")
+    group.add_argument("--active-lens", action="store_true", default=False)
     return parser
 
 

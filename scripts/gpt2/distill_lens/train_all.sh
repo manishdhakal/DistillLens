@@ -1,11 +1,11 @@
 #! /bin/bash
 
 types="rkl" #OR "fkl rkl fkl+rkl akl jsd"
-gpus=4
+gpus=1
 base_path=$(pwd)
 port=2014
 
-model="medium"  # "base" or "medium"
+model="base"  # "base" or "medium"
 
 # GPT-2 Model
 echo "Running for seed ${seed}"

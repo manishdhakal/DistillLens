@@ -45,6 +45,9 @@ OPTS+=" --teacher-model-path ${TEACHER_CKPT}"
 OPTS+=" --teacher-ckpt-name ${TEACHER_CKPT_NAME}"
 OPTS+=" --teacher-model-type ${TEACHER_MODEL_TYPE}"
 OPTS+=" --n-gpu ${GPUS_PER_NODE}"
+# active lens (test)
+OPTS+=" --active-lens"
+
 # OPTS+=" --gradient-checkpointing"
 # data
 OPTS+=" --data-dir ${DATA_DIR}"
@@ -87,7 +90,6 @@ OPTS+=" --do-sample"
 OPTS+=" --top-k 0"
 OPTS+=" --top-p 1.0"
 OPTS+=" --temperature 1.0"
-
 
 export NCCL_DEBUG=""
 export WANDB_DISABLED=True

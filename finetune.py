@@ -50,7 +50,8 @@ from utils import (
     save_parallel,
     get_tokenizer,
     get_model,
-    get_teacher2student_proj
+    get_teacher2student_proj,
+    get_tunedlens_proj
 )
 from rouge_metric import compute_metrics
 
@@ -215,6 +216,39 @@ def prepare_dataset(args, tokenizer):
     else:
         raise ValueError("Do train and do eval must set one")
     return data
+
+
+def get_tuned_lens_loss(
+    args, tokenizer, teacher_model, model_batch, no_model_batch, teacher_affine_vecs
+):
+    n_layer = len(args.teacher_logit_lens)
+
+    #hidden -> vocab
+    teacher_lm_head = getattr(teacher_model, args.lm_head)
+
+    teacher_model.eval()
+    teacher_outputs = teacher_model(**model_batch, output_hidden_states=True, use_cache=False)
+
+    t_hs = teacher_outputs.hidden_states
+
+    tloss = 0.0
+
+    inf_mask = torch.isinf(teacher_outputs.logits)  # [B, L, V]
+    mask = (no_model_batch["label"] != -100).int()  # [B, L]
+
+    for i, layer in enumerate(args.teacher_logit_lens):
+        if args.model_parallel:
+            hidden_states = copy_to_model_parallel_region(t_hs[layer])
+            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+            t_logits = F.linear(tuned_transform, teacher_lm_head.weight)
+        else:
+            hidden_states = t_hs[layer]
+            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+            t_logits = teacher_lm_head(tuned_transform)
+
+        tloss += get_kl(teacher_outputs.logits, t_logits, inf_mask, mask)
+
+    return tloss / float(n_layer)
 
 
 def get_distil_loss(
@@ -401,6 +435,38 @@ def finetune(
         0.0,
         0.0,
     )
+
+    args.active_lens = True
+    print('tuned lens', args.active_lens)
+    # train lens
+    if args.active_lens:
+        print("Tuned (Active) lens mode enabled. Training affine transformations for each layer")
+        tunedlens = get_tunedlens_proj(args).to(device, dtype=eval(args.dtype))
+        teacher_affine_vecs = tunedlens.t_lenses
+        student_affine_vecs = tunedlens.s_lenses
+        tunedlens_optimizer = torch.optim.Adam(tunedlens.parameters(), lr=1e-3)
+        # train
+
+        for epoch in range(10):
+            for it, (model_batch, no_model_batch, gen_data) in enumerate(train_dataloader):
+                dataset["train"].move_to_device(
+                    model_batch, no_model_batch, gen_data, device
+                )
+                torch.cuda.synchronize()
+                st_time = time.time()
+
+                tloss = get_tuned_lens_loss(
+                    args, tokenizer, teacher_model, model_batch, no_model_batch, teacher_affine_vecs
+                )
+
+                tunedlens_optimizer.zero_grad()
+                tloss.backward()
+                tunedlens_optimizer.step()
+
+                if it % 10 == 0:
+                    print("active lens loss: ", tloss)
+
+        print("Tuned teacher lens training complete. Last Loss:", tloss)
 
     best_rougeL = evaluate(args, tokenizer, model, dataset["dev"], "dev", 0, device)
     for epoch in range(args.epochs):
