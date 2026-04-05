@@ -546,7 +546,7 @@ def finetune(
                         }
                     )
 
-            if (it + 1) % 40== 0:
+            if (it + 1) % 800 == 0:
                 break
 
         print("Tuned teacher lens training complete. Last Loss:", tloss)
