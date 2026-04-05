@@ -26,7 +26,7 @@ LM_HEAD="lm_head"
 # data
 DATA_DIR="${BASE_PATH}/processed_data/dolly/full/gpt2/"
 # hp
-BATCH_SIZE=4
+BATCH_SIZE=16
 LR=2.0e-4
 LR_MIN=1.0e-7
 GRAD_ACC=1

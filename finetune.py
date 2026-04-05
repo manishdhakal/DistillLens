@@ -243,11 +243,11 @@ def get_tuned_lens_teacher_loss(
     for i, layer in enumerate(args.teacher_logit_lens):
         if args.model_parallel:
             hidden_states = copy_to_model_parallel_region(t_hs[layer])
-            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight, teacher_affine_vecs[i].bias)
             t_logits = F.linear(tuned_transform, teacher_lm_head.weight)
         else:
             hidden_states = t_hs[layer]
-            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight, teacher_affine_vecs[i].bias)
             t_logits = teacher_lm_head(tuned_transform)
 
         tloss += get_kl(teacher_outputs.logits, t_logits, inf_mask, mask)
@@ -312,11 +312,11 @@ def get_distil_loss(
             for i, layer in enumerate(args.teacher_logit_lens):
                 if args.model_parallel:
                     hidden_states = copy_to_model_parallel_region(t_hs[layer])
-                    tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+                    tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight, teacher_affine_vecs[i].bias)
                     t_logits = F.linear(tuned_transform, teacher_lm_head.weight)
                 else:
                     hidden_states = t_hs[layer]
-                    tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+                    tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight, teacher_affine_vecs[i].bias)
                     t_logits = teacher_lm_head(tuned_transform)
                 t_lens.append(t_logits)
             t_lens = torch.stack(t_lens, dim=1).view(B * n_layer, L, V)
@@ -338,11 +338,11 @@ def get_distil_loss(
             #####
             # if args.model_parallel:
             #     hidden_states = copy_to_model_parallel_region(s_hs[layer])
-            #     tuned_transform = F.linear(hidden_states, student_affine_vecs[i].weight)
+            #     tuned_transform = F.linear(hidden_states, student_affine_vecs[i].weight, student_affine_vecs[i].bias)
             #     s_logits = F.linear(tuned_transform, lm_head.weight)
             # else:
             #     hidden_states = s_hs[layer]
-            #     tuned_transform = F.linear(hidden_states, student_affine_vecs[i].weight)
+            #     tuned_transform = F.linear(hidden_states, student_affine_vecs[i].weight, student_affine_vecs[i].bias)
             #     s_logits = F.linear(tuned_transform, lm_head.weight)
             # s_lens.append(s_logits)
 
@@ -546,7 +546,8 @@ def finetune(
                         }
                     )
 
-            if (it + 1) % 800 == 0:
+            n_batches = 1600 // args.batch_size
+            if (it + 1) % n_batches == 0:
                 break
 
         print("Tuned teacher lens training complete. Last Loss:", tloss)

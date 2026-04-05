@@ -25,7 +25,7 @@ TEACHER_CKPT="${BASE_PATH}/checkpoints/${TEACHER_CKPT_NAME}/"
 # data
 DATA_DIR="${BASE_PATH}/processed_data/dolly/full/gpt2/"
 # hp
-BATCH_SIZE=2
+BATCH_SIZE=32
 LR=2.0e-4
 LR_MIN=1.0e-7
 GRAD_ACC=1

@@ -276,13 +276,13 @@ def get_teacher2student_proj(args):
 class TeacherLensProj(nn.Module):
     def __init__(self, t_h_dim, n_lenses):
         super().__init__()
-        self.t_lenses = nn.ModuleList([nn.Linear(t_h_dim, t_h_dim, bias=False) for _ in range(n_lenses)])
+        self.t_lenses = nn.ModuleList([nn.Linear(t_h_dim, t_h_dim, bias=True) for _ in range(n_lenses)])
 
 
 class StudentLensProj(nn.Module):
     def __init__(self, s_h_dim, n_lenses):
         super().__init__()
-        self.s_lenses = nn.ModuleList([nn.Linear(s_h_dim, s_h_dim, bias=False) for _ in range(n_lenses)])
+        self.s_lenses = nn.ModuleList([nn.Linear(s_h_dim, s_h_dim, bias=True) for _ in range(n_lenses)])
 
 
 def get_tunedlens_proj(args):
