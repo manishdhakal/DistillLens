@@ -160,8 +160,9 @@ def setup_model_and_optimizer(args, ds_config, device, set_optim=True):
         proj_layer = get_teacher2student_proj(args)
         setattr(model, "proj_layer", proj_layer)
     if args.active_lens:
-        tunedlens = get_tunedlens_proj(args).to(device, dtype=eval(args.dtype))
-        setattr(model, "tunedlens", tunedlens)
+        teacher_lens, student_lens = get_tunedlens_proj(args)
+        # setattr(model, "teacher_lens", teacher_lens.to(device, dtype=eval(args.dtype)))
+        setattr(model, "student_lens", student_lens.to(device, dtype=eval(args.dtype)))
     # get the optimizer and lr_scheduler
     if set_optim:
         optimizer = get_optimizer(args, model)
@@ -503,16 +504,23 @@ def finetune(
         0.0,
     )
 
+    teacher_affine_vecs = None
+    student_affine_vecs = None
+
     print('tuned lens', args.active_lens)
     # train lens
     if args.active_lens:
         print("Tuned (Active) lens mode enabled. Training affine transformations for each layer")
-        tunedlens = model.module.tunedlens
-        teacher_affine_vecs = tunedlens.t_lenses
-        student_affine_vecs = tunedlens.s_lenses
-        tunedlens_optimizer = torch.optim.Adam(tunedlens.parameters(), lr=1e-4)
-        # train
+        teacher_lens = get_tunedlens_proj(args)[0].to(device, dtype=eval(args.dtype))
+        teacher_affine_vecs = teacher_lens.t_lenses
 
+        student_affine_vecs = model.module.student_lens.s_lenses
+        
+        tunedlens_optimizer = torch.optim.Adam(
+            list(teacher_lens.parameters()), lr=1e-4
+        )
+
+        # train
         print('batches', len(train_dataloader))
         for it, (model_batch, no_model_batch, gen_data) in enumerate(train_dataloader):
             dataset["train"].move_to_device(
@@ -538,12 +546,14 @@ def finetune(
                         }
                     )
 
-            if it % 100== 0:
+            if it + 1 % 40== 0:
                 break
 
         print("Tuned teacher lens training complete. Last Loss:", tloss)
 
+    # comment for testing training code
     best_rougeL = evaluate(args, tokenizer, model, dataset["dev"], "dev", 0, device)
+    #
     for epoch in range(args.epochs):
         sampler.set_epoch(epoch)
 
