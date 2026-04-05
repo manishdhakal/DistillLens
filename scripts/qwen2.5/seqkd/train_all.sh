@@ -1,20 +1,19 @@
 #! /bin/bash
 
-seeds="10" #"10 20 30 40 50"
+seeds="10"
 types="fkl" #fkl rkl fkl+rkl akl jsd
+
 gpus=4
 base_path=$(pwd)
 port=2014
 
-model="base"  # "base" or "medium"
-
-# GPT-2 Model
+# # TinyLlama Model
 for seed in $seeds
 do
     echo "Running for seed ${seed}"
     for type in $types
     do
-        CMD="bash scripts/gpt2/kd/train_${model}.sh ${base_path} ${port} ${gpus} ${type} ${seed}"
+        CMD="bash scripts/llama/seqkd/seqkd_1B_7B.sh ${base_path} 2020 ${gpus} ${type} ${seed}"
         echo Running command:{$CMD}
         $CMD
     done

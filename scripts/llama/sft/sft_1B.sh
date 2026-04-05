@@ -28,7 +28,7 @@ EVAL_BATCH_SIZE=8
 # length
 MAX_LENGTH=512
 # runtime
-SAVE_PATH="${BASE_PATH}/results/train/${CKPT_NAME}/sft/${TYPE}/seed${SEED}/"
+SAVE_PATH="${BASE_PATH}/results/train/${CKPT_NAME}/sft/${TYPE}"
 
 
 
@@ -82,7 +82,7 @@ OPTS+=" --seed ${SEED}"
 
 # deepspeed
 OPTS+=" --deepspeed"
-OPTS+=" --deepspeed_config ${BASE_PATH}/configs/deepspeed/ds_config_zero1_bf16.json"
+OPTS+=" --deepspeed_config ${BASE_PATH}/configs/deepspeed/ds_config_zero2_bf16.json"
 
 # type
 OPTS+=" --type ${TYPE}"

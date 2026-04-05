@@ -78,7 +78,7 @@ def get_teacher_model(args, device: int):
 
         if args.peft is not None and args.teacher_peft_path is not None:
             if args.peft == "lora":
-                model = PeftModel.from_pretrained(model, args.peft_path)
+                model = PeftModel.from_pretrained(model, args.teacher_peft_path)
             else:
                 raise NotImplementedError
         else:

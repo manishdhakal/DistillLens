@@ -4,9 +4,8 @@ MASTER_ADDR=localhost
 MASTER_PORT=${2-2012}
 NNODES=1
 NODE_RANK=0
-GPUS_PER_NODE=${3-4}
-TYPE=${4-"fkl"} # 'fkl', 'rkl', 'fkl+rkl','akl', 'jsd', or 'dynamic_kl'
-SEED=${5-10}
+GPUS_PER_NODE=${3-16}
+
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
                   --nnodes $NNODES \
                   --node_rank $NODE_RANK \
@@ -14,55 +13,57 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
                   --master_port $MASTER_PORT"
 
 # model
-BASE_PATH=${1-"/home/hybrid_kd"}
-MODEL_TYPE="gpt2"
-CKPT_NAME="gpt2-base"
+BASE_PATH=${1-"/home/MiniLLM"}
+CKPT_NAME="llama-7B"
 CKPT="${BASE_PATH}/checkpoints/${CKPT_NAME}/"
-# CKPT="gpt2" # download automatically
-TEACHER_MODEL_TYPE="gpt2"
-TEACHER_CKPT_NAME="teacher-gpt2-1.5B"
-TEACHER_CKPT="${BASE_PATH}/checkpoints/${TEACHER_CKPT_NAME}/"
+TEACHER_CKPT_NAME="llama-13B"
+TEACHER_CKPT="${BASE_PATH}/checkpoints/${CKPT_NAME}/"
+TEACHER_PEFT_CKPT_NAME="lora-13B"
+TEACHER_PEFT_CKPT="${BASE_PATH}/results/llama/train/${TEACHER_PEFT_CKPT_NAME}/"
+MP_SIZE=4
 # data
-DATA_DIR="${BASE_PATH}/processed_data/dolly/full/gpt2/"
+DATA_DIR="${BASE_PATH}/processed_data/dolly/full/${TEACHER_CKPT_NAME}/"
 # hp
-BATCH_SIZE=4
-LR=2.0e-4
-LR_MIN=1.0e-7
+BATCH_SIZE=8
+LR=0.00001
 GRAD_ACC=1
-EVAL_BATCH_SIZE=16
+EVAL_BATCH_SIZE=8
 # length
 MAX_LENGTH=512
 # runtime
-SAVE_PATH="${BASE_PATH}/results/train/${CKPT_NAME}/kd/${TYPE}"
+SAVE_PATH="${BASE_PATH}/results/llama/train/kd"
+# seed
+SEED=10
+
 
 OPTS=""
 # model
 OPTS+=" --base-path ${BASE_PATH}"
 OPTS+=" --model-path ${CKPT}"
-OPTS+=" --model-type ${MODEL_TYPE}"
-OPTS+=" --ckpt-name ${CKPT_NAME}"
 OPTS+=" --teacher-model-path ${TEACHER_CKPT}"
+OPTS+=" --ckpt-name ${CKPT_NAME}"
 OPTS+=" --teacher-ckpt-name ${TEACHER_CKPT_NAME}"
-OPTS+=" --teacher-model-type ${TEACHER_MODEL_TYPE}"
+OPTS+=" --teacher-model-fp16"
 OPTS+=" --n-gpu ${GPUS_PER_NODE}"
-# OPTS+=" --gradient-checkpointing"
+OPTS+=" --model-type llama"
+OPTS+=" --gradient-checkpointing"
+OPTS+=" --model-parallel"
+OPTS+=" --model-parallel-size ${MP_SIZE}"
 # data
 OPTS+=" --data-dir ${DATA_DIR}"
-OPTS+=" --num-workers 16"
+OPTS+=" --num-workers 4"
 OPTS+=" --dev-num 1000"
 # hp
 OPTS+=" --lr ${LR}"
-OPTS+=" --lr-min ${LR_MIN}"
 OPTS+=" --batch-size ${BATCH_SIZE}"
 OPTS+=" --eval-batch-size ${EVAL_BATCH_SIZE}"
 OPTS+=" --gradient-accumulation-steps ${GRAD_ACC}"
-OPTS+=" --warmup-iters 0."
+OPTS+=" --warmup-iters 0"
 OPTS+=" --lr-decay-style cosine"
 OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
-OPTS+=" --epochs 20"
+OPTS+=" --epochs 10"
 OPTS+=" --kd-ratio 0.5"
-OPTS+=" --lens-coeff 0.0"
 # length
 OPTS+=" --max-length ${MAX_LENGTH}"
 OPTS+=" --max-prompt-length 256"
@@ -75,13 +76,17 @@ OPTS+=" --eval-interval -1"
 OPTS+=" --log-interval 4"
 OPTS+=" --mid-log-num -1"
 OPTS+=" --save ${SAVE_PATH}"
+# lora
+OPTS+=" --peft lora"
+OPTS+=" --teacher-peft-name ${TEACHER_PEFT_CKPT_NAME}"
+OPTS+=" --teacher-peft-path ${TEACHER_PEFT_CKPT}"
 # seed
 OPTS+=" --seed ${SEED}"
 # deepspeed
 OPTS+=" --deepspeed"
-OPTS+=" --deepspeed_config ${BASE_PATH}/configs/deepspeed/ds_config_zero1_bf16.json"
+OPTS+=" --deepspeed_config ${BASE_PATH}/configs/deepspeed/ds_config_zero1_fp16.json"
 # type
-OPTS+=" --type ${TYPE}"
+OPTS+=" --type kd"
 # gen
 OPTS+=" --do-sample"
 OPTS+=" --top-k 0"

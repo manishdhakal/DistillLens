@@ -32,7 +32,7 @@ EVAL_BATCH_SIZE=16
 # length
 MAX_LENGTH=512
 # runtime
-SAVE_PATH="${BASE_PATH}/results/train/${CKPT_NAME}/kd/${TYPE}/seed${SEED}/"
+SAVE_PATH="${BASE_PATH}/results/train/${CKPT_NAME}/kd/${TYPE}"
 
 OPTS=""
 # model
