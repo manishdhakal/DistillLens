@@ -25,7 +25,7 @@ TEACHER_CKPT="${BASE_PATH}/checkpoints/${TEACHER_CKPT_NAME}/"
 # data
 DATA_DIR="${BASE_PATH}/processed_data/dolly/full/gpt2/"
 # hp
-BATCH_SIZE=4
+BATCH_SIZE=2
 LR=2.0e-4
 LR_MIN=1.0e-7
 GRAD_ACC=1
@@ -46,7 +46,7 @@ OPTS+=" --teacher-ckpt-name ${TEACHER_CKPT_NAME}"
 OPTS+=" --teacher-model-type ${TEACHER_MODEL_TYPE}"
 OPTS+=" --n-gpu ${GPUS_PER_NODE}"
 # active lens (test)
-OPTS+=" --active-lens"
+OPTS+=" --active-lens 1"
 
 # OPTS+=" --gradient-checkpointing"
 # data
@@ -65,7 +65,7 @@ OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --epochs 20"
 OPTS+=" --kd-ratio 0.5"
-OPTS+=" --lens-coeff 0.0"
+OPTS+=" --lens-coeff 1.0"
 # length
 OPTS+=" --max-length ${MAX_LENGTH}"
 OPTS+=" --max-prompt-length 256"

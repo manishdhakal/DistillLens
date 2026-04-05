@@ -38,7 +38,7 @@ def add_model_args(parser: argparse.ArgumentParser):
     group.add_argument("--no-value", action="store_true")
     group.add_argument("--dropout-path-rate", type=float, default=None)
     group.add_argument("--dtype", type=str, choices=["torch.float32", "torch.float16", "torch.bfloat16"], default="torch.float16")
-    group.add_argument("--active-lens", action="store_true", default=False)
+    group.add_argument("--active-lens", action="store_true", default=True)
     return parser
 
 
@@ -100,7 +100,7 @@ def add_data_args(parser: argparse.ArgumentParser):
 
 def add_hp_args(parser: argparse.ArgumentParser):
     group = parser.add_argument_group("hp", "hyper parameter configurations")
-    group.add_argument('--batch-size', type=int, default=32,
+    group.add_argument('--batch-size', type=int, default=2,
                        help='Data Loader batch size')
     group.add_argument('--eval-batch-size', type=int, default=32,
                        help='Data Loader batch size')

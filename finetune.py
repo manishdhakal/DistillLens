@@ -159,6 +159,9 @@ def setup_model_and_optimizer(args, ds_config, device, set_optim=True):
     if args.mse_coeff > 0.0:
         proj_layer = get_teacher2student_proj(args)
         setattr(model, "proj_layer", proj_layer)
+    if args.active_lens:
+        tunedlens = get_tunedlens_proj(args).to(device, dtype=eval(args.dtype))
+        setattr(model, "tunedlens", tunedlens)
     # get the optimizer and lr_scheduler
     if set_optim:
         optimizer = get_optimizer(args, model)
@@ -218,7 +221,7 @@ def prepare_dataset(args, tokenizer):
     return data
 
 
-def get_tuned_lens_loss(
+def get_tuned_lens_teacher_loss(
     args, tokenizer, teacher_model, model_batch, no_model_batch, teacher_affine_vecs
 ):
     n_layer = len(args.teacher_logit_lens)
@@ -251,8 +254,40 @@ def get_tuned_lens_loss(
     return tloss / float(n_layer)
 
 
+def get_tuned_lens_student_loss(
+    args, tokenizer, student, model_batch, no_model_batch, student_affine_vecs
+):
+    n_layer = len(args.student_logit_lens)
+
+    #hidden -> vocab
+    student_lm_head = getattr(student, args.lm_head)
+
+    student_outputs = teacher_model(**model_batch, output_hidden_states=True, use_cache=False)
+
+    t_hs = teacher_outputs.hidden_states
+
+    tloss = 0.0
+
+    inf_mask = torch.isinf(teacher_outputs.logits)  # [B, L, V]
+    mask = (no_model_batch["label"] != -100).int()  # [B, L]
+
+    for i, layer in enumerate(args.teacher_logit_lens):
+        if args.model_parallel:
+            hidden_states = copy_to_model_parallel_region(t_hs[layer])
+            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+            t_logits = F.linear(tuned_transform, teacher_lm_head.weight)
+        else:
+            hidden_states = t_hs[layer]
+            tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+            t_logits = teacher_lm_head(tuned_transform)
+
+        tloss += get_kl(teacher_outputs.logits, t_logits, inf_mask, mask)
+
+    return tloss / float(n_layer)
+
+
 def get_distil_loss(
-    args, tokenizer, model, teacher_model, model_batch, no_model_batch, student_outputs
+    args, tokenizer, model, teacher_model, model_batch, no_model_batch, student_outputs, teacher_affine_vecs, student_affine_vecs
 ):
     lm_head = getattr(model.module, args.lm_head)
     teacher_lm_head = getattr(teacher_model, args.lm_head)
@@ -273,12 +308,15 @@ def get_distil_loss(
             n_layer = len(args.teacher_logit_lens)
             t_hs = teacher_outputs.hidden_states
             t_lens = []
-            for layer in args.teacher_logit_lens:
+            for i, layer in enumerate(args.teacher_logit_lens):
                 if args.model_parallel:
                     hidden_states = copy_to_model_parallel_region(t_hs[layer])
-                    t_logits = F.linear(hidden_states, teacher_lm_head.weight)
+                    tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+                    t_logits = F.linear(tuned_transform, teacher_lm_head.weight)
                 else:
-                    t_logits = teacher_lm_head(t_hs[layer])
+                    hidden_states = t_hs[layer]
+                    tuned_transform = F.linear(hidden_states, teacher_affine_vecs[i].weight)
+                    t_logits = teacher_lm_head(tuned_transform)
                 t_lens.append(t_logits)
             t_lens = torch.stack(t_lens, dim=1).view(B * n_layer, L, V)
 
@@ -288,13 +326,42 @@ def get_distil_loss(
         n_layer = len(args.student_logit_lens)
         s_hs = student_outputs.hidden_states
         s_lens = []
-        for layer in args.student_logit_lens:
+        student_tuned_lens_loss = 0.0
+
+        inf_mask = torch.isinf(student_outputs.logits)  # [B, L, V]
+        mask = (no_model_batch["label"] != -100).int()  # [B, L]
+
+        for i, layer in enumerate(args.student_logit_lens):
+            #####
+            # Variant 1: student logits are constrained by final logits (tuned lens exactly)
+            #####
+            # if args.model_parallel:
+            #     hidden_states = copy_to_model_parallel_region(s_hs[layer])
+            #     tuned_transform = F.linear(hidden_states, student_affine_vecs[i].weight)
+            #     s_logits = F.linear(tuned_transform, lm_head.weight)
+            # else:
+            #     hidden_states = s_hs[layer]
+            #     tuned_transform = F.linear(hidden_states, student_affine_vecs[i].weight)
+            #     s_logits = F.linear(tuned_transform, lm_head.weight)
+            # s_lens.append(s_logits)
+
+            # student_tuned_lens_loss += get_kl(student_outputs.logits, s_logits, inf_mask, mask)
+
+            #####
+            # variant 2: student matches teacher with tuned lens
+            # AND
+            # variant 3: neither teacher nor student have a "tuned lens"
+            #####
             if args.model_parallel:
                 hidden_states = copy_to_model_parallel_region(s_hs[layer])
                 s_logits = F.linear(hidden_states, lm_head.weight)
             else:
-                s_logits = lm_head(s_hs[layer])
+                hidden_states = s_hs[layer]
+                s_logits = F.linear(hidden_states, lm_head.weight)
             s_lens.append(s_logits)
+
+        student_tuned_lens_loss = student_tuned_lens_loss / float(n_layer) * .1
+
         s_lens = torch.stack(s_lens, dim=1).view(B * n_layer, L, V)
 
 
@@ -328,7 +395,7 @@ def get_distil_loss(
         # END Jeffery's divergence
         
         # BEGIN Jensen-Shannon divergence
-        lens_loss = get_jsd(t_lens, s_lens, lens_inf_mask, lens_mask, beta=0.5)
+        lens_loss = get_jsd(t_lens, s_lens, lens_inf_mask, lens_mask, beta=0.5) + student_tuned_lens_loss
         # END Jensen-Shannon divergence
         
         
@@ -436,35 +503,43 @@ def finetune(
         0.0,
     )
 
-    args.active_lens = True
     print('tuned lens', args.active_lens)
     # train lens
     if args.active_lens:
         print("Tuned (Active) lens mode enabled. Training affine transformations for each layer")
-        tunedlens = get_tunedlens_proj(args).to(device, dtype=eval(args.dtype))
+        tunedlens = model.module.tunedlens
         teacher_affine_vecs = tunedlens.t_lenses
         student_affine_vecs = tunedlens.s_lenses
-        tunedlens_optimizer = torch.optim.Adam(tunedlens.parameters(), lr=1e-3)
+        tunedlens_optimizer = torch.optim.Adam(tunedlens.parameters(), lr=1e-4)
         # train
 
-        for epoch in range(10):
-            for it, (model_batch, no_model_batch, gen_data) in enumerate(train_dataloader):
-                dataset["train"].move_to_device(
-                    model_batch, no_model_batch, gen_data, device
-                )
-                torch.cuda.synchronize()
-                st_time = time.time()
+        print('batches', len(train_dataloader))
+        for it, (model_batch, no_model_batch, gen_data) in enumerate(train_dataloader):
+            dataset["train"].move_to_device(
+                model_batch, no_model_batch, gen_data, device
+            )
+            torch.cuda.synchronize()
+            st_time = time.time()
 
-                tloss = get_tuned_lens_loss(
-                    args, tokenizer, teacher_model, model_batch, no_model_batch, teacher_affine_vecs
-                )
+            tloss = get_tuned_lens_teacher_loss(
+                args, tokenizer, teacher_model, model_batch, no_model_batch, teacher_affine_vecs
+            )
 
-                tunedlens_optimizer.zero_grad()
-                tloss.backward()
-                tunedlens_optimizer.step()
+            tunedlens_optimizer.zero_grad()
+            tloss.backward()
+            tunedlens_optimizer.step()
 
-                if it % 10 == 0:
-                    print("active lens loss: ", tloss)
+            if it % 10 == 0:
+                if dist.get_rank() == 0:
+                    wandb.log(
+                        {
+                            "step": it,
+                            "loss": tloss,
+                        }
+                    )
+
+            if it % 100== 0:
+                break
 
         print("Tuned teacher lens training complete. Last Loss:", tloss)
 
@@ -511,6 +586,8 @@ def finetune(
                     model_batch,
                     no_model_batch,
                     outputs,
+                    teacher_affine_vecs if args.active_lens else None,
+                    student_affine_vecs if args.active_lens else None,
                 )
                 loss = (1 - args.kd_ratio) * lm_loss + args.kd_ratio * distill_loss
             else:

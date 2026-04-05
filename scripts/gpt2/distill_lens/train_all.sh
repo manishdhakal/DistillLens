@@ -1,6 +1,6 @@
 #! /bin/bash
 
-types="rkl" #OR "fkl rkl fkl+rkl akl jsd"
+types="jsd" #OR "fkl rkl fkl+rkl akl jsd"
 gpus=1
 base_path=$(pwd)
 port=2014
