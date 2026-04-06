@@ -46,7 +46,7 @@ OPTS+=" --teacher-ckpt-name ${TEACHER_CKPT_NAME}"
 OPTS+=" --teacher-model-type ${TEACHER_MODEL_TYPE}"
 OPTS+=" --n-gpu ${GPUS_PER_NODE}"
 # active lens (test)
-OPTS+=" --active-lens 1"
+OPTS+=" --active-lens"
 
 # OPTS+=" --gradient-checkpointing"
 # data

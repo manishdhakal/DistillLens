@@ -26,10 +26,10 @@ LM_HEAD="lm_head"
 # data
 DATA_DIR="${BASE_PATH}/processed_data/dolly/full/gpt2/"
 # hp
-BATCH_SIZE=16
+BATCH_SIZE=2
 LR=2.0e-4
 LR_MIN=1.0e-7
-GRAD_ACC=1
+GRAD_ACC=2
 EVAL_BATCH_SIZE=8
 # length
 MAX_LENGTH=512
@@ -47,6 +47,7 @@ OPTS+=" --teacher-ckpt-name ${TEACHER_CKPT_NAME}"
 OPTS+=" --teacher-model-type ${TEACHER_MODEL_TYPE}"
 OPTS+=" --lm-head ${LM_HEAD}"
 OPTS+=" --n-gpu ${GPUS_PER_NODE}"
+OPTS+=" --active-lens"
 # OPTS+=" --gradient-checkpointing"
 # data
 OPTS+=" --data-dir ${DATA_DIR}"
@@ -68,8 +69,8 @@ OPTS+=" --kd-ratio 1.0"
 OPTS+=" --fkl-coeff 1.0"
 OPTS+=" --rkl-coeff 1.0"
 OPTS+=" --lens-coeff 1.0"
-OPTS+=" --teacher-logit-lens 8 16 24 32 40"
-OPTS+=" --student-logit-lens 2 4 6 8 10"
+OPTS+=" --teacher-logit-lens 12 24 36"
+OPTS+=" --student-logit-lens 3 6 9"
 
 # length
 OPTS+=" --max-length ${MAX_LENGTH}"

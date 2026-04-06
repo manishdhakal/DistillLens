@@ -30,7 +30,7 @@ from transformers import (
     get_polynomial_decay_schedule_with_warmup,
     get_cosine_schedule_with_warmup,
 )
-# from transformers.mpu import copy_to_model_parallel_region
+from transformers.mpu import copy_to_model_parallel_region
 
 from accelerate import init_empty_weights
 from peft import PeftModel
@@ -507,10 +507,10 @@ def finetune(
     teacher_affine_vecs = None
     student_affine_vecs = None
 
-    print('tuned lens', args.active_lens)
+    print_rank('tuned lens', args.active_lens)
     # train lens
     if args.active_lens:
-        print("Tuned (Active) lens mode enabled. Training affine transformations for each layer")
+        print_rank("Tuned (Active) lens mode enabled. Training affine transformations for each layer")
         teacher_lens = get_tunedlens_proj(args)[0].to(device, dtype=eval(args.dtype))
         teacher_affine_vecs = teacher_lens.t_lenses
 
@@ -521,7 +521,7 @@ def finetune(
         )
 
         # train
-        print('batches', len(train_dataloader))
+        print_rank('batches', len(train_dataloader))
         for it, (model_batch, no_model_batch, gen_data) in enumerate(train_dataloader):
             dataset["train"].move_to_device(
                 model_batch, no_model_batch, gen_data, device
@@ -546,11 +546,11 @@ def finetune(
                         }
                     )
 
-            n_batches = 1600 // args.batch_size
-            if (it + 1) % n_batches == 0:
-                break
+            # n_batches = 1600 // args.batch_size
+            # if (it + 1) % n_batches == 0:
+            #     break
 
-        print("Tuned teacher lens training complete. Last Loss:", tloss)
+        print_rank("Tuned teacher lens training complete. Last Loss:", tloss)
 
     # comment for testing training code
     best_rougeL = evaluate(args, tokenizer, model, dataset["dev"], "dev", 0, device)
